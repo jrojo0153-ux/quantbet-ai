@@ -1,32 +1,47 @@
-name: QuantBet AI Daily Run
+library(httr2)
+library(jsonlite)
+library(dplyr)
 
-on:
-  schedule:
-    # Se ejecuta todos los días a las 14:00 UTC (Aprox 8:00 AM CDMX)
-    - cron: '0 14 * * *'
-  workflow_dispatch: # Permite ejecutar el bot manualmente desde el celular
+# 1. Variables de Entorno 
+deepseek_key <- Sys.getenv("DEEPSEEK_API_KEY")
+telegram_token <- Sys.getenv("TELEGRAM_TOKEN")
+chat_id <- Sys.getenv("TELEGRAM_CHAT_ID")
 
-jobs:
-  run-r-script:
-    runs-on: ubuntu-latest
+# Variables simuladas para la prueba:
+partido <- "América vs Cruz Azul"
+probabilidad_local <- 0.55
+cuota_ofrecida <- 2.10
+edge_calculado <- (probabilidad_local * cuota_ofrecida) - 1
 
-    steps:
-      - name: Checkout del código
-        uses: actions/checkout@v4
+# 3. Agente Autónomo (DeepSeek API)
+prompt_text <- paste(
+  "Actúa como un analista cuantitativo de fútbol. Redacta una alerta de apuesta breve y directa para Telegram.",
+  "Partido:", partido,
+  "| Probabilidad Modelo:", probabilidad_local,
+  "| Cuota:", cuota_ofrecida,
+  "| Ventaja (Edge):", edge_calculado
+)
 
-      - name: Instalar R
-        uses: r-lib/actions/setup-r@v2
-        with:
-          r-version: 'release'
+req_deepseek <- request("https://api.deepseek.com/chat/completions") %>%
+  req_headers(
+    "Authorization" = paste("Bearer", deepseek_key),
+    "Content-Type" = "application/json"
+  ) %>%
+  req_body_json(list(
+    model = "deepseek-chat",
+    messages = list(list(role = "user", content = prompt_text))
+  ))
 
-      - name: Instalar librerías de R
-        run: |
-          install.packages(c("httr2", "jsonlite", "dplyr"))
-        shell: Rscript {0}
+res_deepseek <- req_perform(req_deepseek)
+mensaje_final <- resp_body_json(res_deepseek)$choices[[1]]$message$content
 
-      - name: Ejecutar Modelo y Agente Autónomo
-        env:
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: Rscript main.R
+# 4. Envío a Telegram
+req_telegram <- request(paste0("https://api.telegram.org/bot", telegram_token, "/sendMessage")) %>%
+  req_body_json(list(
+    chat_id = chat_id,
+    text = mensaje_final,
+    parse_mode = "Markdown"
+  ))
+
+req_perform(req_telegram)
+print("Ejecución completada con éxito.")
