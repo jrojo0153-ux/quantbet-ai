@@ -2,9 +2,8 @@ name: QuantBet AI Daily Run
 
 on:
   schedule:
-    # Se ejecuta diario a las 8:00 AM hora CDMX (14:00 UTC)
     - cron: '0 14 * * *'
-  workflow_dispatch: # Esto activa un botón para que lo corras cuando quieras
+  workflow_dispatch:
 
 jobs:
   run-r-script:
@@ -17,6 +16,9 @@ jobs:
         uses: r-lib/actions/setup-r@v2
         with:
           r-version: 'release'
+
+      - name: Instalar dependencias del sistema operativo
+        run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
 
       - name: Instalar librerías necesarias
         run: |
